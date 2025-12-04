@@ -1,13 +1,15 @@
 {
     "labels": [
-    "Addressed.",
-    "Added VTG prefix.",
-    "// 561 Virginia Road\n// Concord, Massachusetts 01742",
-    "VTG.",
-    "Deleted req.",
-    "Added function header.",
-    "\n\n\n    ## ------------------------------\n    ## Function: \n    ## Description: \n    ## ------------------------------"
-],
+        "Addressed.",
+        "Added VTG prefix.",
+        "// 561 Virginia Road\n// Concord, Massachusetts 01742",
+        "VTG.",
+        "Deleted req.",
+        "Added function header.",
+        "\n\n\n    ## ------------------------------\n    ## Function: \n    ## Description: \n    ## ------------------------------"
+    ],
     "button_width": 20,
-    "button_height": 2
+    "button_height": 2,
+    "columns": 4,
+    "rows": 7
 }
