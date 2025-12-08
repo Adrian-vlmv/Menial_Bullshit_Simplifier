@@ -93,11 +93,10 @@ class CopyApp:
             self.delete_mode = False
             self.status_label.config(text="")
 
-            # Restaurar colores correctos
+            # Restaurar colores correctos SIN depender del evento <Leave>
             for btn, color in self.original_button_colors.items():
                 btn.config(bg=color)
 
-            self.original_button_colors = {}
             return
 
         # Si no hay botones
@@ -108,6 +107,12 @@ class CopyApp:
         # ---- Activar modo borrar ----
         self.delete_mode = True
         self.status_label.config(text="Modo eliminar ACTIVADO — da click en un botón para eliminarlo")
+
+        # MUY IMPORTANTE:
+        # Restaurar todos los colores ANTES de empezar de nuevo el modo eliminar
+        for btn, color in self.original_button_colors.items():
+            btn.config(bg=color)
+
 
 
     ## ------------------------------
@@ -120,6 +125,10 @@ class CopyApp:
 
         # Reiniciar colores guardados (muy importante para evitar bug)
         self.original_button_colors = {}
+
+        # Asegura que ningún botón queda rojo por un modo anterior
+        self.delete_mode = False
+        self.status_label.config(text="")
 
         columns = self.buttons_data["columns"]
         rows = self.buttons_data["rows"]
