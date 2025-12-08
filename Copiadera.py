@@ -5,11 +5,17 @@ import os
 
 CONFIG_FILE = "botones.json"
 
-# ------------------------------
-# Class: CopyApp
-# Description: Aplicación principal para copiar texto al portapapeles mediante botones dinámicos.
-# ------------------------------
+## ------------------------------
+## Class: CopyApp
+## Description: Aplicación principal para copiar texto al portapapeles mediante botones dinámicos.
+## ------------------------------
 class CopyApp:
+
+    ## ------------------------------
+    ## Function: __init__
+    ## Description: Inicializa la aplicación y carga la configuración.
+    ## param root: Ventana raíz de Tkinter.
+    ## ------------------------------
     def __init__(self, root):
         self.root = root
         self.root.title("Copiar al portapapeles")
@@ -17,30 +23,21 @@ class CopyApp:
         # Cargar configuración
         self.buttons_data = self.load_buttons()
 
-        # =======================
-        #  Menú superior
-        # =======================
+        # Menú
         menubar = Menu(root)
         tools_menu = Menu(menubar, tearoff=0)
         tools_menu.add_command(label="Options", command=self.open_options_window)
         menubar.add_cascade(label="Tools", menu=tools_menu)
         root.config(menu=menubar)
 
-        # =======================
-        #  Frame para botones dinámicos
-        # =======================
+        # Frame botones
         self.buttons_frame = tk.Frame(root)
         self.buttons_frame.pack(pady=10)
 
-        # =======================
-        #  Separador visual
-        # =======================
         separator = ttk.Separator(root, orient="horizontal")
         separator.pack(fill="x", pady=8)
 
-        # =======================
-        #  Frame de control (Add / Delete)
-        # =======================
+        # Frame control
         control_frame = tk.Frame(root)
         control_frame.pack(pady=10)
 
@@ -50,19 +47,28 @@ class CopyApp:
         btn_delete = tk.Button(control_frame, text="Eliminar botón", command=self.delete_button)
         btn_delete.pack(side=tk.LEFT, padx=5)
 
-        # Dibujar los botones
+        # Estado eliminar
+        self.delete_mode = False
+        self.original_button_colors = {}
+
+        # === NUEVO: barra de estatus ===
+        self.status_label = tk.Label(root, text="", anchor="w", bg="#e0e0e0")
+        self.status_label.pack(fill="x", side="bottom")
+
         self.render_buttons()
+
+        self.root.bind("<Delete>", lambda e: self.delete_button())
+
 
     ## ------------------------------
     ## Function: copy_text
-    ## Description: Copia el texto dado al portapapeles.
-    ## param text: Texto a copiar
+    ## Description: Copia el texto proporcionado al portapapeles.
+    ## param text: Texto a copiar.
     ## ------------------------------
     def copy_text(self, text):
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.root.update()
-        print(f"Texto copiado: {text}")
 
 
     ## ------------------------------
@@ -82,27 +88,38 @@ class CopyApp:
     ## Description: Elimina un botón basado en el texto proporcionado.
     ## ------------------------------
     def delete_button(self):
-        labels = self.buttons_data["labels"]
-        if not labels:
-            messagebox.showinfo("Eliminar", "No hay botones para eliminar.")
+        if self.delete_mode:
+            # ---- Apagar modo eliminar ----
+            self.delete_mode = False
+            self.status_label.config(text="")
+
+            # Restaurar colores correctos
+            for btn, color in self.original_button_colors.items():
+                btn.config(bg=color)
+
+            self.original_button_colors = {}
             return
 
-        text = simpledialog.askstring("Eliminar botón", "Escribe el texto exacto del botón a eliminar:")
-        if text in labels:
-            labels.remove(text)
-            self.save_buttons()
-            self.render_buttons()
-        else:
-            messagebox.showerror("Error", f"No existe un botón con el texto: {text}")
+        # Si no hay botones
+        if not self.buttons_data["labels"]:
+            messagebox.showinfo("Eliminar", "No hay botones que eliminar.")
+            return
+
+        # ---- Activar modo borrar ----
+        self.delete_mode = True
+        self.status_label.config(text="Modo eliminar ACTIVADO — da click en un botón para eliminarlo")
 
 
     ## ------------------------------
     ## Function: render_buttons
-    ## Description: Renderiza los botones en la interfaz según la configuración actual.
+    ## Description: Renderiza los botones en la interfaz según la configuración.
     ## ------------------------------
     def render_buttons(self):
         for widget in self.buttons_frame.winfo_children():
             widget.destroy()
+
+        # Reiniciar colores guardados (muy importante para evitar bug)
+        self.original_button_colors = {}
 
         columns = self.buttons_data["columns"]
         rows = self.buttons_data["rows"]
@@ -111,16 +128,46 @@ class CopyApp:
             r = index // columns
             c = index % columns
             if r >= rows:
-                break  # No dibujar fuera de la matriz permitida
+                break
 
             btn = tk.Button(
                 self.buttons_frame,
                 text=text,
                 width=self.buttons_data["button_width"],
-                height=self.buttons_data["button_height"],
-                command=lambda t=text: self.copy_text(t)
+                height=self.buttons_data["button_height"]
             )
+
+            # Registrar color ORIGINAL del botón actual
+            original_color = btn.cget("bg")
+            self.original_button_colors[btn] = original_color
+
+            def normal_click(t=text, b=btn):
+                if not self.delete_mode:
+                    self.copy_text(t)
+                else:
+                    resp = messagebox.askyesno("Eliminar",
+                        f"¿Quieres eliminar el botón:\n\n{t}?")
+                    if resp:
+                        self.buttons_data["labels"].remove(t)
+                        self.save_buttons()
+                        self.render_buttons()
+
+            btn.config(command=normal_click)
+
+            # Hover modo eliminar
+            def on_enter(b=btn):
+                if self.delete_mode:
+                    b.config(bg="red")
+
+            def on_leave(b=btn):
+                if self.delete_mode:
+                    b.config(bg=self.original_button_colors[b])
+
+            btn.bind("<Enter>", lambda e, b=btn: on_enter(b))
+            btn.bind("<Leave>", lambda e, b=btn: on_leave(b))
+
             btn.grid(row=r, column=c, padx=5, pady=5)
+
 
     ## ------------------------------
     ## Function: open_options_window
@@ -199,6 +246,7 @@ class CopyApp:
     def save_buttons(self):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(self.buttons_data, f, indent=4, ensure_ascii=False)
+
 
 
 ## ------------------------------
