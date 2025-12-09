@@ -58,6 +58,8 @@ class CopyApp:
         self.render_buttons()
 
         self.root.bind("<Delete>", lambda e: self.delete_button())
+        self.root.bind("<Escape>", lambda e: self.exit_delete_mode())
+
 
     ## ------------------------------
     ## Function: copy_text
@@ -247,6 +249,20 @@ class CopyApp:
     def save_buttons(self):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(self.buttons_data, f, indent=4, ensure_ascii=False)
+
+    ## ------------------------------
+    ## Function: exit_delete_mode
+    ## Description: Sale del modo eliminar si está activo.
+    ## ------------------------------
+    def exit_delete_mode(self):
+        if self.delete_mode:
+            self.delete_mode = False
+            self.status_label.config(text="")
+    
+            # Restaurar colores
+            for btn, color in self.original_button_colors.items():
+                btn.config(bg=color)
+
 
 ## ------------------------------
 ## Function: main
