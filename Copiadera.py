@@ -74,7 +74,7 @@ class CopyApp:
     ## Description: Agrega un nuevo botón con el texto proporcionado.
     ## ------------------------------
     def add_button(self):
-        text = simpledialog.askstring("Nuevo botón", "¿Qué texto quieres que copie este botón?")
+        text = simpledialog.askstring("New button", "What text would you like to copy?")
         if text:
             self.buttons_data["labels"].append(text)
             self.save_buttons()
@@ -98,12 +98,12 @@ class CopyApp:
 
         # Si no hay botones
         if not self.buttons_data["labels"]:
-            messagebox.showinfo("Eliminar", "No hay botones que eliminar.")
+            messagebox.showinfo("Delete", "There aren't any buttons to delete.")
             return
 
         # ---- Activar modo borrar ----
         self.delete_mode = True
-        self.status_label.config(text="Modo eliminar ACTIVADO — da click en un botón para eliminarlo")
+        self.status_label.config(text="Delete mode ON — click a button to delete it")
 
         # MUY IMPORTANTE:
         # Restaurar todos los colores ANTES de empezar de nuevo el modo eliminar
@@ -149,8 +149,8 @@ class CopyApp:
                 if not self.delete_mode:
                     self.copy_text(t)
                 else:
-                    resp = messagebox.askyesno("Eliminar",
-                        f"¿Quieres eliminar el botón:\n\n{t}?")
+                    resp = messagebox.askyesno("Delete",
+                        f"do you want to delete:\n\n{t}?")
                     if resp:
                         self.buttons_data["labels"].remove(t)
                         self.save_buttons()
@@ -216,7 +216,7 @@ class CopyApp:
                 self.render_buttons()
                 win.destroy()
             except ValueError:
-                messagebox.showerror("Error", "Valores inválidos. Usa números enteros.")
+                messagebox.showerror("Error", "Invalid values. Use integer numbers..")
 
         tk.Button(win, text="Save", command=save_options).pack(pady=20)
 
