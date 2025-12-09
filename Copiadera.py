@@ -18,7 +18,7 @@ class CopyApp:
     ## ------------------------------
     def __init__(self, root):
         self.root = root
-        self.root.title("Copiar al portapapeles")
+        self.root.title("Quick Copy Panel")
 
         # Cargar configuración
         self.buttons_data = self.load_buttons()
@@ -41,10 +41,10 @@ class CopyApp:
         control_frame = tk.Frame(root)
         control_frame.pack(pady=10)
 
-        btn_add = tk.Button(control_frame, text="Agregar botón", command=self.add_button)
+        btn_add = tk.Button(control_frame, text="Add", command=self.add_button)
         btn_add.pack(side=tk.LEFT, padx=5)
 
-        btn_delete = tk.Button(control_frame, text="Eliminar botón", command=self.delete_button)
+        btn_delete = tk.Button(control_frame, text="Delete", command=self.delete_button)
         btn_delete.pack(side=tk.LEFT, padx=5)
 
         # Estado eliminar
@@ -59,7 +59,6 @@ class CopyApp:
 
         self.root.bind("<Delete>", lambda e: self.delete_button())
 
-
     ## ------------------------------
     ## Function: copy_text
     ## Description: Copia el texto proporcionado al portapapeles.
@@ -69,7 +68,6 @@ class CopyApp:
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.root.update()
-
 
     ## ------------------------------
     ## Function: add_button
@@ -81,7 +79,6 @@ class CopyApp:
             self.buttons_data["labels"].append(text)
             self.save_buttons()
             self.render_buttons()
-
 
     ## ------------------------------
     ## Function: delete_button
@@ -112,8 +109,6 @@ class CopyApp:
         # Restaurar todos los colores ANTES de empezar de nuevo el modo eliminar
         for btn, color in self.original_button_colors.items():
             btn.config(bg=color)
-
-
 
     ## ------------------------------
     ## Function: render_buttons
@@ -177,7 +172,6 @@ class CopyApp:
 
             btn.grid(row=r, column=c, padx=5, pady=5)
 
-
     ## ------------------------------
     ## Function: open_options_window
     ## Description: Abre una ventana para configurar las opciones de los botones.
@@ -226,7 +220,6 @@ class CopyApp:
 
         tk.Button(win, text="Save", command=save_options).pack(pady=20)
 
-
     ## ------------------------------
     ## Function: load_buttons
     ## Description: Carga la configuración de botones desde un archivo JSON.
@@ -247,7 +240,6 @@ class CopyApp:
 
         return data
 
-
     ## ------------------------------
     ## Function: save_buttons
     ## Description: Guarda la configuración de botones en un archivo JSON.
@@ -255,8 +247,6 @@ class CopyApp:
     def save_buttons(self):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(self.buttons_data, f, indent=4, ensure_ascii=False)
-
-
 
 ## ------------------------------
 ## Function: main
