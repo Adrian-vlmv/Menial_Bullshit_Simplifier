@@ -19,6 +19,11 @@ class CopyApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Quick Copy Panel")
+        # Tamaño por defecto pequeño
+        try:
+            root.geometry("420x300")
+        except Exception:
+            pass
 
         # Cargar configuración
         self.buttons_data = self.load_buttons()
@@ -30,16 +35,20 @@ class CopyApp:
         menubar.add_cascade(label="Tools", menu=tools_menu)
         root.config(menu=menubar)
 
-        # Frame botones
+        # Frame botones (expandible) - ocupa la mayor parte de la ventana
         self.buttons_frame = tk.Frame(root)
-        self.buttons_frame.pack(pady=10)
+        self.buttons_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-        separator = ttk.Separator(root, orient="horizontal")
-        separator.pack(fill="x", pady=8)
+        # Footer: separador + controles + status (siempre visible en la parte inferior)
+        footer_frame = tk.Frame(root)
+        footer_frame.pack(side="bottom", fill="x")
 
-        # Frame control
-        control_frame = tk.Frame(root)
-        control_frame.pack(pady=10)
+        separator = ttk.Separator(footer_frame, orient="horizontal")
+        separator.pack(fill="x", pady=(2,4))
+
+        # Frame control (siempre visible) dentro del footer, arriba del status
+        control_frame = tk.Frame(footer_frame)
+        control_frame.pack(fill="x", padx=5, pady=(4,6))
 
         btn_add = tk.Button(control_frame, text="Add", command=self.add_button)
         btn_add.pack(side=tk.LEFT, padx=5)
@@ -47,13 +56,15 @@ class CopyApp:
         btn_delete = tk.Button(control_frame, text="Delete", command=self.delete_button)
         btn_delete.pack(side=tk.LEFT, padx=5)
 
+        # Barra de estado (debajo de los controles en el footer)
+        self.status_label = tk.Label(footer_frame, text="", anchor="w", bg="#e0e0e0")
+        self.status_label.pack(fill="x", padx=3, pady=(0,4))
+
         # Estado eliminar
         self.delete_mode = False
         self.original_button_colors = {}
 
-        # === NUEVO: barra de estatus ===
-        self.status_label = tk.Label(root, text="", anchor="w", bg="#e0e0e0")
-        self.status_label.pack(fill="x", side="bottom")
+        # === status/control footer creado arriba ===
 
         self.render_buttons()
 
@@ -70,6 +81,15 @@ class CopyApp:
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.root.update()
+        # Mostrar notificación en la barra de estado y limpiarla después de 3s
+        try:
+            # Mostrar solo una porción corta si el texto es muy largo
+            display = text if len(text) <= 60 else text[:57] + "..."
+            self.status_label.config(text=f"Copied: {display}")
+            # Limpiar mensaje después de 3 segundos
+            self.root.after(3000, lambda: self.status_label.config(text=""))
+        except Exception:
+            pass
 
     ## ------------------------------
     ## Function: add_button
@@ -130,18 +150,40 @@ class CopyApp:
         columns = self.buttons_data["columns"]
         rows = self.buttons_data["rows"]
 
+        # Si está activado el auto-resize, configuramos la grilla para que las
+        # columnas y filas se expandan uniformemente. Si no, dejamos el tamaño
+        # fijo según button_width/height.
+        auto = self.buttons_data.get("auto_resize", True)
+
+        # Configurar pesos de columna/fila de acuerdo a las dimensiones solicitadas
+        for c in range(columns):
+            # weight 1 para que se expandan si auto_resize está activo, 0 si no
+            # Añadimos minsize y uniform para asegurar reparto equitativo
+            self.buttons_frame.grid_columnconfigure(c, weight=(1 if auto else 0), minsize=(20 if auto else 0), uniform=("col" if auto else None))
+        for r in range(rows):
+            self.buttons_frame.grid_rowconfigure(r, weight=(1 if auto else 0), minsize=(20 if auto else 0), uniform=("row" if auto else None))
+
+        # Forzar cálculo de geometría antes de colocar botones para evitar que
+        # las columnas aparezcan apiladas en una sola columna en algunos sistemas
+        self.buttons_frame.update_idletasks()
+
         for index, text in enumerate(self.buttons_data["labels"]):
             r = index // columns
             c = index % columns
             if r >= rows:
                 break
 
-            btn = tk.Button(
-                self.buttons_frame,
-                text=text,
-                width=self.buttons_data["button_width"],
-                height=self.buttons_data["button_height"]
-            )
+            # Crear botón. Si auto_resize está activado, no forzamos width/height
+            # y usamos sticky="nsew" para que ocupe todo el espacio de la celda.
+            if auto:
+                btn = tk.Button(self.buttons_frame, text=text)
+            else:
+                btn = tk.Button(
+                    self.buttons_frame,
+                    text=text,
+                    width=self.buttons_data["button_width"],
+                    height=self.buttons_data["button_height"]
+                )
 
             # Registrar color ORIGINAL del botón actual
             original_color = btn.cget("bg")
@@ -172,7 +214,10 @@ class CopyApp:
             btn.bind("<Enter>", lambda e, b=btn: on_enter(b))
             btn.bind("<Leave>", lambda e, b=btn: on_leave(b))
 
-            btn.grid(row=r, column=c, padx=5, pady=5)
+            if auto:
+                btn.grid(row=r, column=c, padx=5, pady=5, sticky="nsew")
+            else:
+                btn.grid(row=r, column=c, padx=5, pady=5)
 
     ## ------------------------------
     ## Function: open_options_window
@@ -207,12 +252,36 @@ class CopyApp:
         rows_entry.pack()
         rows_entry.insert(0, str(self.buttons_data["rows"]))
 
+        # Auto-resize checkbox
+        auto_var = tk.BooleanVar(value=self.buttons_data.get("auto_resize", True))
+        def toggle_auto(*args):
+            if auto_var.get():
+                width_entry.config(state="disabled")
+                height_entry.config(state="disabled")
+            else:
+                width_entry.config(state="normal")
+                height_entry.config(state="normal")
+
+        # Inicialmente deshabilitar o habilitar entradas según el valor
+        toggle_auto()
+
+        auto_cb = tk.Checkbutton(win, text="Auto-resize buttons to fit window (show full matrix)", variable=auto_var, onvalue=True, offvalue=False)
+        auto_cb.pack(pady=8)
+
+        # Usar trace_add para actualizar el estado de las entradas cuando cambia el checkbox
+        try:
+            auto_var.trace_add("write", toggle_auto)
+        except AttributeError:
+            # fallback para versiones antiguas
+            auto_var.trace("w", toggle_auto)
+
         def save_options():
             try:
                 self.buttons_data["button_width"] = int(width_entry.get())
                 self.buttons_data["button_height"] = int(height_entry.get())
                 self.buttons_data["columns"] = int(columns_entry.get())
                 self.buttons_data["rows"] = int(rows_entry.get())
+                self.buttons_data["auto_resize"] = bool(auto_var.get())
 
                 self.save_buttons()
                 self.render_buttons()
@@ -239,6 +308,7 @@ class CopyApp:
         data.setdefault("button_height", 2)
         data.setdefault("columns", 5)
         data.setdefault("rows", 5)
+        data.setdefault("auto_resize", True)
 
         return data
 
