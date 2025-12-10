@@ -19,14 +19,21 @@ class CopyApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Quick Copy Panel")
-        # Tamaño por defecto pequeño
+
+        # Cargar configuración (antes de aplicar tamaño)
+        self.buttons_data = self.load_buttons()
+
+        # Aplicar último tamaño guardado (si existe), si no usar pequeño por defecto
+        w = self.buttons_data.get("window_width", 420)
+        h = self.buttons_data.get("window_height", 300)
         try:
-            root.geometry("420x300")
+            root.geometry(f"{w}x{h}")
         except Exception:
             pass
 
-        # Cargar configuración
-        self.buttons_data = self.load_buttons()
+        # Usamos este atributo para comparar cambios y para debounce al guardar
+        self._last_known_size = (w, h)
+        self._resize_after_id = None
 
         # Menú
         menubar = Menu(root)
@@ -64,7 +71,8 @@ class CopyApp:
         self.delete_mode = False
         self.original_button_colors = {}
 
-        # === status/control footer creado arriba ===
+        # Bind para detectar cambios de tamaño y guardar (debounced)
+        self.root.bind("<Configure>", self._on_configure)
 
         self.render_buttons()
 
@@ -309,6 +317,9 @@ class CopyApp:
         data.setdefault("columns", 5)
         data.setdefault("rows", 5)
         data.setdefault("auto_resize", True)
+        # Defaults para tamaño de ventana
+        data.setdefault("window_width", 420)
+        data.setdefault("window_height", 300)
 
         return data
 
@@ -332,6 +343,53 @@ class CopyApp:
             # Restaurar colores
             for btn, color in self.original_button_colors.items():
                 btn.config(bg=color)
+
+    ## ------------------------------
+    ## Function: _on_configure
+    ## Description: Maneja el evento de cambio de tamaño de la ventana.
+    ## Guarda el tamaño en la configuración (debounced).
+    ## ------------------------------
+    def _on_configure(self, event):
+        # Solo manejar eventos del root (evita hijos) y cuando la ventana esté normal
+        try:
+            if event.widget is not self.root:
+                return
+        except Exception:
+            return
+        
+        # Tomar tamaño actual
+        w = event.width
+        h = event.height
+
+        # Ignorar cambios que no modifican tamaño
+        if (w, h) == getattr(self, "_last_known_size", (None, None)):
+            return
+
+        # Actualizar último tamaño conocido
+        self._last_known_size = (w, h)
+
+        # Debounce la escritura al archivo para evitar demasiadas operaciones
+        if self._resize_after_id:
+            try:
+                self.root.after_cancel(self._resize_after_id)
+            except Exception:
+                pass
+
+        self._resize_after_id = self.root.after(700, self._save_window_size)
+
+    ## ------------------------------
+    ## Function: _save_window_size
+    ## Description: Guarda el tamaño actual de la ventana en la configuración y persiste en JSON.
+    ## ------------------------------
+    def _save_window_size(self):
+        # Guardar tamaño actual en la configuración y persistir en JSON
+        try:
+            w, h = self._last_known_size
+            self.buttons_data["window_width"] = int(w)
+            self.buttons_data["window_height"] = int(h)
+            self.save_buttons()
+        except Exception:
+            pass
 
 
 ## ------------------------------
