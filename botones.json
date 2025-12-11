@@ -13,8 +13,8 @@
     "columns": 4,
     "rows": 2,
     "auto_resize": true,
-    "window_width": 442,
-    "window_height": 225,
-    "button_pixel_width": 98,
-    "button_pixel_height": 63
+    "window_width": 584,
+    "window_height": 220,
+    "button_pixel_width": 134,
+    "button_pixel_height": 60
 }

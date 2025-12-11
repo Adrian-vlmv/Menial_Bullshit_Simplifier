@@ -215,10 +215,11 @@ class CopyApp:
         # Configurar pesos de columna/fila de acuerdo a las dimensiones solicitadas
         for c in range(columns):
             # weight 1 para que se expandan si auto_resize está activo, 0 si no
-            # Añadimos minsize y uniform para asegurar reparto equitativo
-            self.buttons_frame.grid_columnconfigure(c, weight=(1 if auto else 0), minsize=(20 if auto else 0), uniform=("col" if auto else None))
+            # Inicialmente sin minsize; lo ajustaremos dinámicamente después
+            self.buttons_frame.grid_columnconfigure(c, weight=(1 if auto else 0), minsize=0, uniform=("col" if auto else None))
         for r in range(rows):
-            self.buttons_frame.grid_rowconfigure(r, weight=(1 if auto else 0), minsize=(20 if auto else 0), uniform=("row" if auto else None))
+            # Igual para filas: weight se aplica, minsize se ajustará dinámicamente
+            self.buttons_frame.grid_rowconfigure(r, weight=(1 if auto else 0), minsize=0, uniform=("row" if auto else None))
 
         # Guardar los valores configurados actualmente
         self._configured_cols = columns
@@ -227,6 +228,17 @@ class CopyApp:
         # Forzar cálculo de geometría antes de colocar botones para evitar que
         # las columnas aparezcan apiladas en una sola columna en algunos sistemas
         self.buttons_frame.update_idletasks()
+
+        # Ajustar minsize de filas de forma dinámica para forzar expansión vertical.
+        try:
+            total_h = max(1, self.buttons_frame.winfo_height())
+            # restar márgenes y separación aproximada
+            vpadding = rows * 10
+            per_row = max(20, (total_h - vpadding) // max(1, rows))
+            for r in range(rows):
+                self.buttons_frame.grid_rowconfigure(r, minsize=per_row)
+        except Exception:
+            pass
 
         # Decidir si mostrar los botones de copiado según el espacio disponible
         avail_w = max(1, self.buttons_frame.winfo_width())
