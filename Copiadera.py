@@ -34,6 +34,8 @@ class CopyApp:
         # Usamos este atributo para comparar cambios y para debounce al guardar
         self._last_known_size = (w, h)
         self._resize_after_id = None
+        # Debounce id for re-rendering when geometry changes
+        self._render_after_id = None
 
         # Menú
         menubar = Menu(root)
@@ -47,38 +49,67 @@ class CopyApp:
         self.buttons_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Footer: separador + controles + status (siempre visible en la parte inferior)
-        footer_frame = tk.Frame(root)
-        footer_frame.pack(side="bottom", fill="x")
+        self.footer_frame = tk.Frame(root)
+        # Use place to pin the footer to the bottom so it remains visible even
+        # when the window becomes very small.
+        self.footer_frame.place(relx=0, rely=1.0, relwidth=1.0, anchor='sw')
 
-        separator = ttk.Separator(footer_frame, orient="horizontal")
+        separator = ttk.Separator(self.footer_frame, orient="horizontal")
         separator.pack(fill="x", pady=(2,4))
 
         # Frame control (siempre visible) dentro del footer, arriba del status
-        control_frame = tk.Frame(footer_frame)
+        control_frame = tk.Frame(self.footer_frame)
         control_frame.pack(fill="x", padx=5, pady=(4,6))
 
-        btn_add = tk.Button(control_frame, text="Add", command=self.add_button)
-        btn_add.pack(side=tk.LEFT, padx=5)
+        # Centrar los botones Add/Delete: creamos un contenedor centrado
+        center_frame = tk.Frame(control_frame)
+        center_frame.pack()
 
-        btn_delete = tk.Button(control_frame, text="Delete", command=self.delete_button)
-        btn_delete.pack(side=tk.LEFT, padx=5)
+        # Misma anchura para ambos botones
+        control_btn_width = 12
+        btn_add = tk.Button(center_frame, text="Add", command=self.add_button, width=control_btn_width)
+        btn_add.pack(side=tk.LEFT, padx=6)
+
+        btn_delete = tk.Button(center_frame, text="Delete", command=self.delete_button, width=control_btn_width)
+        btn_delete.pack(side=tk.LEFT, padx=6)
 
         # Barra de estado (debajo de los controles en el footer)
-        self.status_label = tk.Label(footer_frame, text="", anchor="w", bg="#e0e0e0")
+        self.status_label = tk.Label(self.footer_frame, text="", anchor="w", bg="#e0e0e0")
         self.status_label.pack(fill="x", padx=3, pady=(0,4))
+
+        # Ajustar el padding inferior del área de botones para reservar espacio
+        # para el footer y evitar que se solapen.
+        try:
+            self.root.update_idletasks()
+            fh = self.footer_frame.winfo_reqheight()
+            # Repack buttons_frame with bottom padding equal to footer height
+            try:
+                self.buttons_frame.pack_configure(padx=5, pady=(5, fh+5))
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # Asegurar que el footer siempre sea visible: fijar tamaño mínimo.
+        self._ensure_footer_minsize()
 
         # Estado eliminar
         self.delete_mode = False
         self.original_button_colors = {}
+        # Track previously configured grid sizes to reset them when matrix dims shrink
+        self._configured_cols = 0
+        self._configured_rows = 0
 
         # Bind para detectar cambios de tamaño y guardar (debounced)
         self.root.bind("<Configure>", self._on_configure)
 
-        self.render_buttons()
-
-        self.root.bind("<Delete>", lambda e: self.delete_button())
-        self.root.bind("<Escape>", lambda e: self.exit_delete_mode())
-
+        # Renderizar inmediatamente y también programar un rápido recheck.
+        # Esto evita esperar mucho tiempo para que aparezcan los botones.
+        try:
+            self.render_buttons()
+        except Exception:
+            pass
+        self.root.after(40, self._initial_layout_setup)
 
     ## ------------------------------
     ## Function: copy_text
@@ -145,6 +176,12 @@ class CopyApp:
     ## Description: Renderiza los botones en la interfaz según la configuración.
     ## ------------------------------
     def render_buttons(self):
+        # Reforzar minsize del footer cada vez que renderizamos (evita que se oculte)
+        try:
+            self._ensure_footer_minsize()
+        except Exception:
+            pass
+
         for widget in self.buttons_frame.winfo_children():
             widget.destroy()
 
@@ -163,6 +200,18 @@ class CopyApp:
         # fijo según button_width/height.
         auto = self.buttons_data.get("auto_resize", True)
 
+        # Resetear configuración previa en caso de que la nueva matriz sea
+        # más pequeña (evita que queden columnas/filas con weight activo)
+        try:
+            for i in range(self._configured_cols):
+                # limpiar columnas anteriores
+                self.buttons_frame.grid_columnconfigure(i, weight=0, minsize=0, uniform=None)
+            for j in range(self._configured_rows):
+                # limpiar filas anteriores
+                self.buttons_frame.grid_rowconfigure(j, weight=0, minsize=0, uniform=None)
+        except Exception:
+            pass
+
         # Configurar pesos de columna/fila de acuerdo a las dimensiones solicitadas
         for c in range(columns):
             # weight 1 para que se expandan si auto_resize está activo, 0 si no
@@ -171,9 +220,29 @@ class CopyApp:
         for r in range(rows):
             self.buttons_frame.grid_rowconfigure(r, weight=(1 if auto else 0), minsize=(20 if auto else 0), uniform=("row" if auto else None))
 
+        # Guardar los valores configurados actualmente
+        self._configured_cols = columns
+        self._configured_rows = rows
+
         # Forzar cálculo de geometría antes de colocar botones para evitar que
         # las columnas aparezcan apiladas en una sola columna en algunos sistemas
         self.buttons_frame.update_idletasks()
+
+        # Decidir si mostrar los botones de copiado según el espacio disponible
+        avail_w = max(1, self.buttons_frame.winfo_width())
+        avail_h = max(1, self.buttons_frame.winfo_height())
+        MIN_CELL_W = 40  # px mínimos por celda (para aviso)
+        MIN_CELL_H = 24
+        need_w = columns * MIN_CELL_W
+        need_h = rows * MIN_CELL_H
+
+        # Si el espacio es limitado, mostramos una advertencia en la barra
+        # pero NO ocultamos los botones: siempre se renderizan.
+        if (avail_w < need_w) or (avail_h < need_h):
+            self.status_label.config(text="Window small — buttons may be clipped")
+        else:
+            if self.status_label.cget("text").startswith("Window small"):
+                self.status_label.config(text="")
 
         for index, text in enumerate(self.buttons_data["labels"]):
             r = index // columns
@@ -226,6 +295,28 @@ class CopyApp:
                 btn.grid(row=r, column=c, padx=5, pady=5, sticky="nsew")
             else:
                 btn.grid(row=r, column=c, padx=5, pady=5)
+
+        # Después de colocar botones, medir tamaño real de un botón para guardar en px
+        try:
+            self.buttons_frame.update_idletasks()
+            any_btn = None
+            for w in self.buttons_frame.winfo_children():
+                if isinstance(w, tk.Button):
+                    any_btn = w
+                    break
+            if any_btn:
+                bw = any_btn.winfo_width()
+                bh = any_btn.winfo_height()
+                # Guardar tamaño en pixeles para referencia futura
+                self.buttons_data["button_pixel_width"] = int(bw)
+                self.buttons_data["button_pixel_height"] = int(bh)
+                # Persistir (no es demasiado frecuente: render_buttons se llama en cambios)
+                try:
+                    self.save_buttons()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     ## ------------------------------
     ## Function: open_options_window
@@ -323,6 +414,23 @@ class CopyApp:
 
         return data
 
+    def _ensure_footer_minsize(self):
+        # Calcular altura requerida del footer y asegurarse de que la ventana
+        # no pueda hacerse más pequeña que eso.
+        try:
+            # Asegurar que estén calculadas las geometrías
+            self.root.update_idletasks()
+            fh = self.footer_frame.winfo_reqheight()
+            fw = self.footer_frame.winfo_reqwidth()
+            min_w = max(200, fw)
+            min_h = max(fh + 10, 60)
+            try:
+                self.root.minsize(min_w, min_h)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     ## ------------------------------
     ## Function: save_buttons
     ## Description: Guarda la configuración de botones en un archivo JSON.
@@ -357,6 +465,13 @@ class CopyApp:
         except Exception:
             return
         
+        # En cada configure reforzamos la minsize del footer para evitar que se
+        # oculte accidentalmente durante redimensiones muy pequeñas.
+        try:
+            self._ensure_footer_minsize()
+        except Exception:
+            pass
+
         # Tomar tamaño actual
         w = event.width
         h = event.height
@@ -376,6 +491,11 @@ class CopyApp:
                 pass
 
         self._resize_after_id = self.root.after(700, self._save_window_size)
+        # También programar un render para actualizar visibilidad de botones
+        try:
+            self._schedule_render()
+        except Exception:
+            pass
 
     ## ------------------------------
     ## Function: _save_window_size
@@ -390,6 +510,26 @@ class CopyApp:
             self.save_buttons()
         except Exception:
             pass
+
+    def _initial_layout_setup(self):
+        # Called after startup to ensure sizes are calculated and then render
+        try:
+            self._ensure_footer_minsize()
+        except Exception:
+            pass
+        try:
+            self.render_buttons()
+        except Exception:
+            pass
+
+    def _schedule_render(self, delay=250):
+        # Debounce re-render calls when window resizes
+        try:
+            if self._render_after_id:
+                self.root.after_cancel(self._render_after_id)
+        except Exception:
+            pass
+        self._render_after_id = self.root.after(delay, lambda: self.render_buttons())
 
 
 ## ------------------------------
